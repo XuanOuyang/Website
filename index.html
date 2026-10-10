@@ -1064,6 +1064,10 @@ const mob = () => matchMedia("(max-width: 800px)").matches;
 
 let busy = false, lastW = 0, ty = 0;
 
+/* delay (ms) after a scrollable panel hits its end before the page may flip; raise = longer pause */
+const EDGE_DELAY = 700;
+let edgeEl = null, edgeT = 0;
+
 const inner = (t, d) => { const el = t.closest && t.closest(".sc");
   return !!el && (d > 0 ? el.scrollTop + el.clientHeight < el.scrollHeight - 2 : el.scrollTop > 0); };
 
@@ -1093,12 +1097,24 @@ addEventListener("wheel", e => {
   if (!introDone) { e.preventDefault(); return; }
   if (mob()) return;
 
+  const prevW = lastW;
   lastW = Date.now();
   if (busy) { e.preventDefault(); return; }
 
   const d = Math.sign(e.deltaY);
   if (!d || Math.abs(e.deltaY) < 4) return;
-  if (inner(e.target, d)) return;
+  if (inner(e.target, d)) { edgeEl = null; return; }
+
+  /* Reached the end of a scrollable panel: wait EDGE_DELAY ms, and require a fresh
+     scroll gesture (a short pause in wheel events), before flipping to the next page */
+  const sc = e.target.closest && e.target.closest(".sc");
+  if (sc && sc.scrollHeight > sc.clientHeight + 2 && canLock(d)) {
+    if (edgeEl !== sc) { edgeEl = sc; edgeT = Date.now(); }
+    if (Date.now() - edgeT < EDGE_DELAY || Date.now() - prevW < 120) { e.preventDefault(); return; }
+  } else {
+    edgeEl = null;
+  }
+
   if (canLock(d)) { e.preventDefault(); go(cur() + d); }
 }, { passive: false });
 
